@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Interactive Supermarket Sales Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #f5f7fb;
+      color: #111827;
+    }
+    .container {
+      max-width: 1320px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    .title-wrap h1 {
+      margin: 0;
+      font-size: 30px;
+    }
+    .title-wrap p {
+      margin: 8px 0 0;
+      color: #6b7280;
+    }
+    .badge {
+      background: #111827;
+      color: #fff;
+      padding: 10px 14px;
+      border-radius: 999px;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 20px;
+      padding: 20px;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+    }
+    .toolbar {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .toolbar label {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .toolbar input,
+    .toolbar select,
+    .toolbar button {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid #d1d5db;
+      font-size: 14px;
+      background: #fff;
+    }
+    .toolbar button {
+      cursor: pointer;
+      font-weight: 700;
+      background: #111827;
+      color: #fff;
+      border: none;
+    }
+    .hint {
+      margin-top: 10px;
+      font-size: 13px;
+      color: #6b7280;
+      line-height: 1.5;
+    }
+    .grid {
+      display: grid;
+      gap: 20px;
+    }
+    .kpi-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      margin-bottom: 20px;
+    }
+    .chart-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      margin-bottom: 20px;
+    }
+    .full-grid {
+      grid-template-columns: 1fr;
+      margin-bottom: 20px;
+    }
+    .card h3 {
+      margin: 0 0 6px;
+      font-size: 16px;
+    }
+    .sub {
+      margin: 0 0 14px;
+      font-size: 13px;
+      color: #6b7280;
+    }
+    .kpi-value {
+      font-size: 30px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .kpi-note {
+      color: #6b7280;
+      font-size: 13px;
+    }
+    canvas {
+      width: 100% !important;
+      height: 320px !important;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th, td {
+      padding: 12px 10px;
+      border-bottom: 1px solid #e5e7eb;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      color: #6b7280;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .status {
+      margin-top: 12px;
+      font-size: 13px;
+      color: #374151;
+      white-space: pre-line;
+    }
+    .code {
+      background: #0f172a;
+      color: #e5e7eb;
+      border-radius: 16px;
+      padding: 16px;
+      font-size: 13px;
+      overflow-x: auto;
+      line-height: 1.5;
+    }
+    @media (max-width: 1000px) {
+      .toolbar, .kpi-grid, .chart-grid { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 640px) {
+      .toolbar, .kpi-grid, .chart-grid { grid-template-columns: 1fr; }
+      .container { padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="title-wrap">
+        <h1>Interactive Supermarket Sales Dashboard</h1>
+        <p>Upload a CSV export from MySQL and the dashboard will update automatically.</p>
+      </div>
+      <div class="badge">HTML + CSS + JS</div>
+    </div>
+
+    <div class="card" style="margin-bottom:20px;">
+      <div class="toolbar">
+        <div>
+          <label for="csvFile">Upload CSV file</label>
+          <input type="file" id="csvFile" accept=".csv" />
+        </div>
+        <div>
+          <label for="branchFilter">Branch</label>
+          <select id="branchFilter">
+            <option value="All">All</option>
+          </select>
+        </div>
+        <div>
+          <label for="customerTypeFilter">Customer Type</label>
+          <select id="customerTypeFilter">
+            <option value="All">All</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:end;">
+          <button id="resetBtn" type="button">Reset Filters</button>
+        </div>
+      </div>
+      <div class="hint">
+        Required columns in CSV: <b>Invoice_ID, Branch, Customer_type, Product_line, cogs, Date, Time</b>.<br/>
+        Export your raw table with a query like: <code>SELECT * FROM supermarket_sales;</code>
+      </div>
+      <div id="status" class="status">No file uploaded yet. A small demo dataset is currently loaded.</div>
+    </div>
+
+    <div class="grid kpi-grid">
+      <div class="card">
+        <h3>Total Orders</h3>
+        <div class="kpi-value" id="totalOrders">-</div>
+        <div class="kpi-note">Based on current filters</div>
+      </div>
+      <div class="card">
+        <h3>Total Sales</h3>
+        <div class="kpi-value" id="totalSales">-</div>
+        <div class="kpi-note">Sum of COGS</div>
+      </div>
+      <div class="card">
+        <h3>Top Sales Month</h3>
+        <div class="kpi-value" id="topMonth">-</div>
+        <div class="kpi-note">Month with highest sales</div>
+      </div>
+      <div class="card">
+        <h3>Best Branch</h3>
+        <div class="kpi-value" id="bestBranch">-</div>
+        <div class="kpi-note">Highest sales branch</div>
+      </div>
+    </div>
+
+    <div class="grid chart-grid">
+      <div class="card">
+        <h3>Sales by Branch</h3>
+        <p class="sub">Equivalent to Question 1B</p>
+        <canvas id="branchChart"></canvas>
+      </div>
+      <div class="card">
+        <h3>Sales by Product Line</h3>
+        <p class="sub">Equivalent to Question 2A</p>
+        <canvas id="productLineChart"></canvas>
+      </div>
+    </div>
+
+    <div class="grid chart-grid">
+      <div class="card">
+        <h3>Hourly Orders in Top Sales Month</h3>
+        <p class="sub">Equivalent to Question 3A</p>
+        <canvas id="hourlyOrderChart"></canvas>
+      </div>
+      <div class="card">
+        <h3>Monthly Sales vs Previous Cumulative Sales</h3>
+        <p class="sub">Equivalent to Question 4</p>
+        <canvas id="monthlyChart"></canvas>
+      </div>
+    </div>
+
+    <div class="grid full-grid">
+      <div class="card">
+        <h3>Sales and Orders by Product Line and Customer Type</h3>
+        <p class="sub">Equivalent to Question 2B</p>
+        <table>
+          <thead>
+            <tr>
+              <th>Product Line</th>
+              <th>Customer Type</th>
+              <th>Total Sales</th>
+              <th>Total Orders</th>
+            </tr>
+          </thead>
+          <tbody id="summaryTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="grid full-grid">
+      <div class="card">
+        <h3>How to Export CSV from MySQL</h3>
+        <div class="code">SELECT *
+FROM supermarket_sales;
+
+Then export the result as CSV from MySQL Workbench or your SQL tool.
+Upload that CSV into this dashboard.</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const demoData = [
+      { Invoice_ID: '750-67-8428', Branch: 'A', Customer_type: 'Member', Product_line: 'Health and beauty', cogs: 74.69, Date: '1/5/2019', Time: '13:08' },
+      { Invoice_ID: '226-31-3081', Branch: 'C', Customer_type: 'Normal', Product_line: 'Electronic accessories', cogs: 15.28, Date: '3/8/2019', Time: '10:29' },
+      { Invoice_ID: '631-41-3108', Branch: 'A', Customer_type: 'Normal', Product_line: 'Home and lifestyle', cogs: 46.33, Date: '3/3/2019', Time: '13:23' },
+      { Invoice_ID: '123-19-1176', Branch: 'A', Customer_type: 'Member', Product_line: 'Health and beauty', cogs: 58.22, Date: '1/27/2019', Time: '20:33' },
+      { Invoice_ID: '373-73-7910', Branch: 'A', Customer_type: 'Normal', Product_line: 'Sports and travel', cogs: 86.31, Date: '2/8/2019', Time: '10:37' },
+      { Invoice_ID: '699-14-3026', Branch: 'C', Customer_type: 'Member', Product_line: 'Electronic accessories', cogs: 85.39, Date: '2/25/2019', Time: '18:30' },
+      { Invoice_ID: '355-53-5943', Branch: 'A', Customer_type: 'Member', Product_line: 'Food and beverages', cogs: 68.84, Date: '2/24/2019', Time: '14:36' },
+      { Invoice_ID: '315-22-5665', Branch: 'C', Customer_type: 'Normal', Product_line: 'Fashion accessories', cogs: 73.56, Date: '2/20/2019', Time: '17:15' },
+      { Invoice_ID: '665-32-9167', Branch: 'B', Customer_type: 'Member', Product_line: 'Food and beverages', cogs: 36.26, Date: '1/10/2019', Time: '11:23' },
+      { Invoice_ID: '692-92-5582', Branch: 'B', Customer_type: 'Normal', Product_line: 'Sports and travel', cogs: 54.84, Date: '3/6/2019', Time: '19:20' },
+      { Invoice_ID: '351-62-0822', Branch: 'B', Customer_type: 'Member', Product_line: 'Health and beauty', cogs: 14.48, Date: '3/10/2019', Time: '15:14' },
+      { Invoice_ID: '529-56-3974', Branch: 'C', Customer_type: 'Member', Product_line: 'Home and lifestyle', cogs: 25.51, Date: '1/15/2019', Time: '12:50' }
+    ];
+
+    let rawData = [...demoData];
+    let filteredData = [...demoData];
+    let branchChart, productLineChart, hourlyOrderChart, monthlyChart;
+
+    const csvFileInput = document.getElementById('csvFile');
+    const branchFilter = document.getElementById('branchFilter');
+    const customerTypeFilter = document.getElementById('customerTypeFilter');
+    const resetBtn = document.getElementById('resetBtn');
+    const statusEl = document.getElementById('status');
+
+    function parseDate(value) {
+      if (!value) return null;
+      const parts = value.split('/');
+      if (parts.length !== 3) return null;
+      const month = Number(parts[0]);
+      const day = Number(parts[1]);
+      const year = Number(parts[2]);
+      return { month, day, year };
+    }
+
+    function parseTimeHour(value) {
+      if (!value) return null;
+      const hour = Number(String(value).split(':')[0]);
+      return Number.isNaN(hour) ? null : hour;
+    }
+
+    function normalizeRow(row) {
+      return {
+        Invoice_ID: row.Invoice_ID || row.invoice_id || row.invoiceId || '',
+        Branch: row.Branch || row.branch || '',
+        Customer_type: row.Customer_type || row.customer_type || row.customerType || '',
+        Product_line: row.Product_line || row.product_line || row.productLine || '',
+        cogs: Number(row.cogs || row.COGS || 0),
+        Date: row.Date || row.date || '',
+        Time: row.Time || row.time || ''
+      };
+    }
+
+    function groupSum(data, keyGetter, valueGetter) {
+      const map = new Map();
+      data.forEach(item => {
+        const key = keyGetter(item);
+        const value = valueGetter(item);
+        map.set(key, (map.get(key) || 0) + value);
+      });
+      return map;
+    }
+
+    function groupCount(data, keyGetter) {
+      const map = new Map();
+      data.forEach(item => {
+        const key = keyGetter(item);
+        map.set(key, (map.get(key) || 0) + 1);
+      });
+      return map;
+    }
+
+    function formatMoney(value) {
+      return '$' + value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function getFilteredData() {
+      const selectedBranch = branchFilter.value;
+      const selectedCustomerType = customerTypeFilter.value;
+
+      return rawData.filter(row => {
+        const branchMatch = selectedBranch === 'All' || row.Branch === selectedBranch;
+        const customerMatch = selectedCustomerType === 'All' || row.Customer_type === selectedCustomerType;
+        return branchMatch && customerMatch;
+      });
+    }
+
+    function populateFilters() {
+      const branches = [...new Set(rawData.map(d => d.Branch).filter(Boolean))].sort();
+      const customerTypes = [...new Set(rawData.map(d => d.Customer_type).filter(Boolean))].sort();
+
+      branchFilter.innerHTML = '<option value="All">All</option>' + branches.map(v => `<option value="${v}">${v}</option>`).join('');
+      customerTypeFilter.innerHTML = '<option value="All">All</option>' + customerTypes.map(v => `<option value="${v}">${v}</option>`).join('');
+    }
+
+    function updateKpis(data) {
+      const totalOrders = data.length;
+      const totalSales = data.reduce((sum, row) => sum + row.cogs, 0);
+
+      const monthSales = new Map();
+      data.forEach(row => {
+        const d = parseDate(row.Date);
+        if (!d) return;
+        monthSales.set(d.month, (monthSales.get(d.month) || 0) + row.cogs);
+      });
+      const sortedMonths = [...monthSales.entries()].sort((a, b) => b[1] - a[1]);
+      const topMonth = sortedMonths.length ? `Month ${sortedMonths[0][0]}` : '-';
+
+      const branchSales = new Map();
+      data.forEach(row => {
+        branchSales.set(row.Branch, (branchSales.get(row.Branch) || 0) + row.cogs);
+      });
+      const sortedBranches = [...branchSales.entries()].sort((a, b) => b[1] - a[1]);
+      const bestBranch = sortedBranches.length ? sortedBranches[0][0] : '-';
+
+      document.getElementById('totalOrders').textContent = totalOrders.toLocaleString();
+      document.getElementById('totalSales').textContent = formatMoney(totalSales);
+      document.getElementById('topMonth').textContent = topMonth;
+      document.getElementById('bestBranch').textContent = bestBranch;
+    }
+
+    function renderBranchChart(data) {
+      const salesMap = groupSum(data, d => d.Branch, d => d.cogs);
+      const labels = [...salesMap.keys()].sort();
+      const values = labels.map(label => salesMap.get(label));
+
+      if (branchChart) branchChart.destroy();
+      branchChart = new Chart(document.getElementById('branchChart'), {
+        type: 'bar',
+        data: { labels, datasets: [{ label: 'Sales', data: values }] },
+        options: { responsive: true, scales: { y: { beginAtZero: true } } }
+      });
+    }
+
+    function renderProductLineChart(data) {
+      const salesMap = groupSum(data, d => d.Product_line, d => d.cogs);
+      const labels = [...salesMap.keys()].sort();
+      const values = labels.map(label => salesMap.get(label));
+
+      if (productLineChart) productLineChart.destroy();
+      productLineChart = new Chart(document.getElementById('productLineChart'), {
+        type: 'bar',
+        data: { labels, datasets: [{ label: 'Sales', data: values }] },
+        options: { responsive: true, scales: { y: { beginAtZero: true } } }
+      });
+    }
+
+    function renderHourlyOrderChart(data) {
+      const monthSales = new Map();
+      data.forEach(row => {
+        const d = parseDate(row.Date);
+        if (!d) return;
+        monthSales.set(d.month, (monthSales.get(d.month) || 0) + row.cogs);
+      });
+      const topMonthEntry = [...monthSales.entries()].sort((a, b) => b[1] - a[1])[0];
+      const topMonth = topMonthEntry ? topMonthEntry[0] : null;
+
+      const topMonthRows = data.filter(row => {
+        const d = parseDate(row.Date);
+        return d && d.month === topMonth;
+      });
+
+      const orderMap = groupCount(topMonthRows, d => parseTimeHour(d.Time));
+      const labels = [...orderMap.keys()].filter(v => v !== null).sort((a, b) => a - b).map(h => String(h).padStart(2, '0') + ':00');
+      const values = [...orderMap.keys()].filter(v => v !== null).sort((a, b) => a - b).map(h => orderMap.get(h));
+
+      if (hourlyOrderChart) hourlyOrderChart.destroy();
+      hourlyOrderChart = new Chart(document.getElementById('hourlyOrderChart'), {
+        type: 'line',
+        data: { labels, datasets: [{ label: 'Orders', data: values, tension: 0.3 }] },
+        options: { responsive: true, scales: { y: { beginAtZero: true } } }
+      });
+    }
+
+    function renderMonthlyChart(data) {
+      const monthMap = new Map();
+      const orderMap = new Map();
+      data.forEach(row => {
+        const d = parseDate(row.Date);
+        if (!d) return;
+        monthMap.set(d.month, (monthMap.get(d.month) || 0) + row.cogs);
+        orderMap.set(d.month, (orderMap.get(d.month) || 0) + 1);
+      });
+
+      const months = [...monthMap.keys()].sort((a, b) => a - b);
+      const sales = months.map(m => monthMap.get(m));
+      let runningSales = 0;
+      const salesBefore = months.map(m => {
+        const val = runningSales === 0 ? null : runningSales;
+        runningSales += monthMap.get(m);
+        return val;
+      });
+
+      if (monthlyChart) monthlyChart.destroy();
+      monthlyChart = new Chart(document.getElementById('monthlyChart'), {
+        type: 'bar',
+        data: {
+          labels: months.map(m => `Month ${m}`),
+          datasets: [
+            { label: 'Monthly Sales', data: sales },
+            { label: 'Previous Cumulative Sales', data: salesBefore, type: 'line' }
+          ]
+        },
+        options: { responsive: true, scales: { y: { beginAtZero: true } } }
+      });
+    }
+
+    function renderSummaryTable(data) {
+      const tbody = document.getElementById('summaryTableBody');
+      tbody.innerHTML = '';
+
+      const map = new Map();
+      data.forEach(row => {
+        const key = `${row.Product_line}__${row.Customer_type}`;
+        if (!map.has(key)) {
+          map.set(key, {
+            productLine: row.Product_line,
+            customerType: row.Customer_type,
+            totalSales: 0,
+            totalOrders: 0
+          });
+        }
+        const item = map.get(key);
+        item.totalSales += row.cogs;
+        item.totalOrders += 1;
+      });
+
+      [...map.values()]
+        .sort((a, b) => a.productLine.localeCompare(b.productLine) || a.customerType.localeCompare(b.customerType))
+        .forEach(item => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${item.productLine}</td>
+            <td>${item.customerType}</td>
+            <td>${formatMoney(item.totalSales)}</td>
+            <td>${item.totalOrders}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+    }
+
+    function renderAll() {
+      filteredData = getFilteredData();
+      updateKpis(filteredData);
+      renderBranchChart(filteredData);
+      renderProductLineChart(filteredData);
+      renderHourlyOrderChart(filteredData);
+      renderMonthlyChart(filteredData);
+      renderSummaryTable(filteredData);
+    }
+
+    function validateColumns(rows) {
+      if (!rows.length) return false;
+      const sample = rows[0];
+      const required = ['Invoice_ID', 'Branch', 'Customer_type', 'Product_line', 'cogs', 'Date', 'Time'];
+      return required.every(col => Object.prototype.hasOwnProperty.call(sample, col));
+    }
+
+    csvFileInput.addEventListener('change', (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          try {
+            const rows = results.data.map(normalizeRow).filter(row => row.Invoice_ID);
+            if (!validateColumns(rows)) {
+              statusEl.textContent = 'Upload failed. Your CSV must include: Invoice_ID, Branch, Customer_type, Product_line, cogs, Date, Time';
+              return;
+            }
+            rawData = rows;
+            populateFilters();
+            renderAll();
+            statusEl.textContent = `Loaded ${rows.length} rows from ${file.name}. Dashboard updated successfully.`;
+          } catch (error) {
+            statusEl.textContent = 'Could not parse this CSV file.';
+          }
+        },
+        error: () => {
+          statusEl.textContent = 'Could not read this CSV file.';
+        }
+      });
+    });
+
+    branchFilter.addEventListener('change', renderAll);
+    customerTypeFilter.addEventListener('change', renderAll);
+    resetBtn.addEventListener('click', () => {
+      branchFilter.value = 'All';
+      customerTypeFilter.value = 'All';
+      renderAll();
+    });
+
+    populateFilters();
+    renderAll();
+  </script>
+</body>
+</html>
