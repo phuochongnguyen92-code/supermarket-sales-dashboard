@@ -54,7 +54,7 @@ trends.
 
 ## 📸 Dashboard Preview
 
-![Dashboard Samples](images/ddashboard_sample.png)
+![Dashboard Samples](./images/ddashboard_sample.png)
 
 ---
 
